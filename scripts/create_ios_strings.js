@@ -22,28 +22,34 @@ function jsonToDotStrings(jsonObj){
     return returnString;
 }
 
-function initIosDir(){
+function initIosDir(context){
     if (!iosProjFolder || !iosPbxProjPath) {
-        var config = fs.readFileSync("config.xml").toString();
-        var name = getValue(config, "name");
-
-        iosProjFolder =  "platforms/ios/" + name;
-        iosPbxProjPath = "platforms/ios/" + name + ".xcodeproj/project.pbxproj";
+        var glob = context.requireCordovaModule('glob');
+        var path = context.requireCordovaModule('path');
+        var projFiles = glob.sync("*.xcodeproj");
+        console.log("projFiles: ",projFiles);
+        var projFile = _.first(projFiles);
+        console.log("projFile: ",projFile);
+        var extension = path.extname(projFile);
+        console.log("extension: ",extension);
+        var projName = path.basename(projFile, extension);
+        console.log("projName: ",projName);
+        
+        iosProjFolder = projName;
+        iosPbxProjPath = path.join(projFile, "project.pbxproj");
     }
 }
 
 function getTargetIosDir() {
-    initIosDir();
     return iosProjFolder;
 }
 
 function getXcodePbxProjPath() {
-    initIosDir();
     return iosPbxProjPath;
 }
 
 function writeStringFile(plistStringJsonObj, lang, fileName) {
-    var lProjPath = getTargetIosDir() + "/Resources/" + lang + ".lproj";
+    var lProjPath = iosProjFolder + "/Resources/" + lang + ".lproj";
     fs.ensureDir(lProjPath, function (err) {
         if (!err) {
             var stringToWrite = jsonToDotStrings(plistStringJsonObj);
@@ -83,12 +89,13 @@ function writeLocalisationFieldsToXcodeProj(filePaths, groupname, proj) {
     }
 }
 module.exports = function(context) {
-
+    debugger;
     var path = context.requireCordovaModule('path');
     var q = context.requireCordovaModule('q');
     var deferred = q.defer();
     var glob = context.requireCordovaModule('glob');
     var xcode = require('xcode');
+    initIosDir(context);
 
     var localizableStringsPaths = [];
     var infoPlistPaths = [];
@@ -144,8 +151,9 @@ module.exports = function(context) {
                     deferred.reject(err);
                 }
                 else {
-
+                    console.log("localizableStringsPaths", localizableStringsPaths)
                     writeLocalisationFieldsToXcodeProj(localizableStringsPaths, 'Localizable.strings', proj);
+                    console.log("infoPlistPaths", infoPlistPaths)
                     writeLocalisationFieldsToXcodeProj(infoPlistPaths, 'InfoPlist.strings', proj);
 
                     fs.writeFileSync(getXcodePbxProjPath(), proj.writeSync());
@@ -166,20 +174,22 @@ function getTargetLang(context) {
     var deferred = context.requireCordovaModule('q').defer();
     var path = context.requireCordovaModule('path');
     var glob = context.requireCordovaModule('glob');
-
-    glob("translations/app/*.json",
+    console.log(process.cwd());
+    glob("www/translations/app/*.json",
         function(err, langFiles) {
+            console.log(process.cwd());
             if(err) {
                 deferred.reject(err);
             }
             else {
 
                 langFiles.forEach(function(langFile) {
-                    var matches = langFile.match(/translations\/app\/(.*).json/);
+                    var matches = langFile.match(/www\/translations\/app\/(.*).json/);
                     if (matches) {
+                                  console.log(path.join(process.cwd(), langFile));
                         targetLangArr.push({
                             lang: matches[1],
-                            path: path.join(context.opts.projectRoot, langFile)
+                            path: path.join(process.cwd(), langFile)
                         });
                     }
                 });
@@ -189,4 +199,3 @@ function getTargetLang(context) {
     );
     return deferred.promise;
 }
-
